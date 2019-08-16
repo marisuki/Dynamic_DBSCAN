@@ -8,6 +8,19 @@ import scala.reflect.ClassTag
 
 object CCGraph extends Serializable {
 
+  def traitAPI(sc: SparkContext, edges: RDD[(Vector[Int], Vector[Int])]): RDD[Iterable[Vector[Int]]]={
+    val localize = edges.collect()
+    var v2i: Map[Vector[Int], Int] = Map()
+    var edge = Array[(Int, Int)]()
+    for((f, t) <- localize){
+      if(!v2i.contains(f)) v2i ++= Map(f -> v2i.size)
+      if(!v2i.contains(t)) v2i ++= Map(t -> v2i.size)
+      edge ++= Array((v2i(f), v2i(t)))
+    }
+    var vertex = v2i.map(x => (x._2, x._1)).toArray
+    CCRun(sc.makeRDD(vertex), sc.makeRDD(edge))
+  }
+
   def CCRun(vertexes: RDD[(Int, Vector[Int])], edges: RDD[(Int, Int)]): RDD[Iterable[Vector[Int]]]={
     val edge: RDD[Edge[String]] = edges.map(x => Edge(x._1.toLong, x._2.toLong))
     val vertex: RDD[(VertexId, Vector[Int])] = vertexes.map(x => (x._1.toLong, x._2))
@@ -16,4 +29,11 @@ object CCGraph extends Serializable {
     result.vertices.join(vertex).map(x => x._2).groupByKey().map(x => x._2)
   }
 
+  def main(args: Array[String]): Unit = {
+    val conf = new SparkConf().setMaster("local[2]").setAppName("Dynamic DBSCAN")
+    val sc = new SparkContext(conf)
+    var s = mutable.HashMap((1, 2))
+    s.put(1, 4)
+    s.foreach(println)
+  }
 }

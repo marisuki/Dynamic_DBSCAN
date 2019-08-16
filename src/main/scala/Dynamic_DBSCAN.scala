@@ -12,14 +12,16 @@ import scala.collection.mutable
  2.
  */
 
+//Use DBSCAN.scala instead
+@deprecated
 object Dynamic_DBSCAN extends Serializable {
 
   val conf = new SparkConf().setMaster("local[2]").setAppName("Dynamic DBSCAN")
   val sc = new SparkContext(conf)
 
-  val eps = 0.7
+  val eps = 0.9
   val rho = 0.2
-  val minPts = 3
+  val minPts = 4
   val dim = 4
   val maxdis = (1+rho)*eps
   val blk_size = eps/sqrt(dim)
@@ -38,9 +40,12 @@ object Dynamic_DBSCAN extends Serializable {
   var edgeMap = sc.makeRDD(Array[(Vector[Int], Iterable[Vector[Int]])]())
   var Vertex = sc.makeRDD(Array[Vector[Int]]())
   var VertexHashing = mutable.HashMap[Vector[Int], Int]()
+  var witnessMap = sc.makeRDD(Array[((Vector[Int], Vector[Int]), Iterable[(Vector[Int], Vector[Int])])]()) // core cell -> aBCP pairs
 
   val appendingInc = sc.parallelize(generateTraverse(search_rad))
   val appendingrhoInc = sc.parallelize(generateTraverse((search_rad*(1+rho)).toInt))
+
+  var edgeX = sc.makeRDD(Array[(Vector[Int], Vector[Int])]())
 
   def init(): RDD[(Vector[Int], Iterable[Vector[Int]])] ={
     // Parsing Sep to dataset
@@ -60,25 +65,33 @@ object Dynamic_DBSCAN extends Serializable {
 
   def semidy_dbscan(): Unit={
     appendingRDD = appendingRDD.filter(_._1.nonEmpty)
-    val all = appendingRDD.union(globalRDD)
+    val all = appendingRDD.union(globalRDD).map(x => (x._1, x._2.toSet)).groupByKey().map(x => {
+      var tmp = Set[Vector[Int]]()
+      for(s <- x._2) tmp ++= s
+      (x._1, tmp.toIterable)
+    })
     val cellSizeUpd = all.map(x => (x._1, x._2.size))
-    println("cellsize")
-    cellSizeUpd.foreach(println)
-    println()
-    appendingRDD.foreach(println)
-    println()
-    for(x <- appendingRDD.collect()){
+
+    //println("cellsize")
+    //cellSizeUpd.foreach(println)
+    //println()
+    //appendingRDD.foreach(println)
+    //println()
+    var vinMp: mutable.HashMap[Vector[Int], Int] = new mutable.HashMap[Vector[Int], Int]()
+    val append = appendingRDD.collect()
+    var cnt = 1.0
+    for(x <- append){
       val base= x._1
-      println(base)
+      println(cnt/append.length.toDouble)
+      cnt += 1.0
+      //println(base)
       //number of points in one cell: updated
       val statistic = sc.makeRDD(Array(base)).map(x => (x, -1))
         .join(cellSizeUpd)
-        .map(x => x._2._2)
-        .collect()
+        .map(x => x._2._2).collect()
       var edgeAddition = Array[(Vector[Int], Vector[Int])]()
       var coreCellUpd = sc.makeRDD(Array[(Vector[Int], Boolean)]())
       var upd_core = Array[(Vector[Int], Boolean)]()
-      var vinMp: mutable.HashMap[Vector[Int], Int] = new mutable.HashMap[Vector[Int], Int]()
       //println(base)
       val p_core = all.join(sc.makeRDD(Array(base)).map(x => (x, -1))).map(x => x._2._1.toArray).flatMap(x => x)
       if(statistic(0) >= minPts){
@@ -99,7 +112,7 @@ object Dynamic_DBSCAN extends Serializable {
         val initial = rel_pts.map(x => (x, -1)).join(vincnt).map(x => (x._1, x._2._2)).collect()
         //val vinMp = mutable.HashMap[Vector[Int], Int]()
         for((k,v) <- initial){
-          vinMp.put(k, v)
+          if(!vinMp.contains(k)) vinMp.put(k, v)
         }
         for(self_pt <- self_pts){
           for(rel_pt <- rel_pts.collect()){
@@ -187,12 +200,12 @@ object Dynamic_DBSCAN extends Serializable {
             }
           }
         }
-        println("vinMp:")
-        vinMp.foreach(println)
-        println("self")
-        self_pts.foreach(println)
-        println("rel")
-        rel_pts.foreach(println)
+        //println("vinMp:")
+        //vinMp.foreach(println)
+        //println("self")
+        //self_pts.foreach(println)
+        //println("rel")
+       /// rel_pts.foreach(println)
         for(pt <- self_pts) vinMp(pt) -= (self_pts.length-1)
         for(pt <- rel_pts) upd_core ++= Array((pt, vinMp(pt)>minPts))
         val reverse = all.join(sc.makeRDD(Array(base)).map(x => (x, -1))).map(x => {
@@ -221,17 +234,17 @@ object Dynamic_DBSCAN extends Serializable {
           (x._1, ans)
         })
       }
-      println("Core Point:")
-      corePoint.foreach(println)
-      println()
-      println("Core cell")
-      coreCell.foreach(println)
-      println()
+      //println("Core Point:")
+      //corePoint.foreach(println)
+      //println()
+      //println("Core cell")
+      //coreCell.foreach(println)
+      //println()
       val newvec = coreCellUpd.filter(_._2).map(x => x._1)
       Vertex = Vertex.union(newvec)
-      println("add edge")
+      //println("add edge")
       for((poi, status) <- upd_core){
-        println(poi)
+        //println(poi)
         if(status){
           val group = solveGroup(poi)
           val searchRDD_1 = appendingInc.map(y => {
@@ -246,14 +259,14 @@ object Dynamic_DBSCAN extends Serializable {
           val solv = outer.map(x => (x, -1)).join(all).map(x => x._2._2).flatMap(x => x).map(x => {
             (x, ecudlian(x, poi) < eps)
           }).collect()
-          println("solv:")
-          for(x <- solv) println(x)
+          //println("solv:")
+          //for(x <- solv) println(x)
           //outer = outer.map(x => (x, poi)).map(x => (x, empty(x._2, x._1))).filter(_._2==1).map(x => x._1._1)
           //outer.foreach(println)
           for(o <- solv) edgeAddition ++= Array((group, solveGroup(o._1)))
         }
-        edgeAddition.foreach(println)
-        println()
+        //edgeAddition.foreach(println)
+        //println()
       }
       edgeMap = edgeMap.union(sc.makeRDD(edgeAddition).groupByKey()).map(x => (x._1, x._2.toSet))
       val edges = edgeMap.map(x => {
@@ -267,13 +280,13 @@ object Dynamic_DBSCAN extends Serializable {
       //val cgraph = CCGraph()
       //val searchPointRDD_1 = searchRDD_1.map(x => (x, null)).join(all).map(x => (x._1, x._2._2))
       //val searchPointRDD_2 = searchRDD_2.map(x => (x, null)).join(all).map(x => (x._1, x._2._2))
-      (vertex, edges)
-      println("vertex")
-      vertex.foreach(println)
-      println()
-      println("edge")
-      edges.foreach(println)
-      println()
+      //(vertex, edges)
+      //println("vertex")
+      //vertex.foreach(println)
+      //println()
+      //println("edge")
+      //edges.foreach(println)
+      //println()
     }
     //status upd
     globalRDD = all
@@ -290,9 +303,13 @@ object Dynamic_DBSCAN extends Serializable {
     println()
     Vertex.foreach(println)
     println()
+    println("CC:")
+    val cc = queryCC()
+    cc.foreach(println)
+    evaluate(cc.collect())
   }
 
-  def query(): RDD[Iterable[Vector[Int]]]={
+  def queryCC(): RDD[Iterable[Vector[Int]]]={
     CCGraph.CCRun(Vertex.map(x => (hash(x), x)), edgeMap.map(x => {
       var tmp = Array[(Int, Int)]()
       for(item <- x._2) tmp ++= Array((hash(x._1), hash(item)))
@@ -300,8 +317,225 @@ object Dynamic_DBSCAN extends Serializable {
     }).flatMap(x => x))
   }
 
+  def queryCC_(): RDD[Iterable[Vector[Int]]]={
+    CCGraph.CCRun(Vertex.map(x => (hash(x), x)), edgeX.map(x => (hash(x._1), hash(x._2))))
+  }
+
   def dynamic_dbscan(): Unit={
-    
+    // appendingRDD - deletionRDD => globalRDD
+    // witnessPair: witnessMap =+=> Maintain
+
+    // 1 add
+    appendingRDD = appendingRDD.filter(_._1.nonEmpty)
+    deletionRDD = deletionRDD.filter(_._1.nonEmpty)
+    var all = appendingRDD.union(globalRDD).groupByKey().map(x => {
+      var tmp = Set[Vector[Int]]()
+      for(s <- x._2) tmp ++= s.toSet
+      (x._1, tmp.toArray)
+    })
+    val cellSizeUpd = all.map(x => (x._1, x._2.length))
+    var vinMp = new mutable.HashMap[Vector[Int], Int]()
+    var edge = new mutable.HashMap[Vector[Int], Set[Vector[Int]]]()
+    for((k, v) <- edgeMap.collect()) edge.put(k, v.toSet)
+    var vertex = Vertex.collect().toSet
+
+    // ADDITION: BATCH
+    var cnt = 0.0
+    val append = appendingRDD.collect()
+    for(x <- append){
+      val base = x._1
+      println(base)
+      cnt += 1.0
+      println(cnt/append.length.toDouble)
+      val EpsSearch = appendingInc.map(x => {
+        var tmp = Vector[Int]()
+        for(i <- base.indices) tmp ++= Vector(base(i) + x(i))
+        tmp
+      })
+      val relatedPts = EpsSearch.map(x => (x, -1)).join(all).map(x => (x._1, x._2._2))
+      val relCnt = relatedPts.map(x => x._2).flatMap(x => x).map(x => (x, -1)).join(vincnt).map(x => (x._1, x._2._2)).collect()
+      for((k, v) <- relCnt) if(!vinMp.contains(k)) vinMp.put(k, v)
+      val selfPts = appendingRDD.join(sc.makeRDD(Array(base)).map(x => (x, -1))).map(x => x._2._1).flatMap(x => x).collect()
+      val relatedUpdPts = relatedPts.map(x => x._2).flatMap(x => x).filter(!selfPts.toSet.contains(_)).collect()
+      //core point: aBCP
+      var possibleBCPMaintain = Array[(Vector[Int], Vector[Int])]()
+      for(sf <- selfPts){
+        for(rel <- relatedUpdPts){//could be more fast using Segment Tree
+          val dis = ecudlian(sf, rel)
+          if(dis <= eps){
+            if(vinMp.contains(sf)) vinMp.put(sf, vinMp(sf) + 1)
+            else vinMp.put(sf, 1)
+            if(vinMp.contains(rel)) vinMp.put(rel, vinMp(rel) + 1)
+            else vinMp.put(rel, 1)
+            //possibleBCPMaintain ++= Array((sf, rel))
+          }
+          else if(dis <= maxdis){
+            if(vinMp.contains(sf)) vinMp.put(sf, vinMp(sf) + new util.Random().nextInt(2))
+            else vinMp.put(sf, new util.Random().nextInt(2))
+            if(vinMp.contains(rel)) vinMp.put(rel, vinMp(rel) + new util.Random().nextInt(2))
+            else vinMp.put(rel, new util.Random().nextInt(2))
+          }
+          else{
+            if(!vinMp.contains(sf)) vinMp.put(sf, 0)
+            if(!vinMp.contains(rel)) vinMp.put(rel, 0)
+          }
+        }
+      }
+
+      vinMp.foreach(println)
+
+      var upd_core = Array[(Vector[Int], Boolean)]()
+      for((k, v) <- vinMp) upd_core ++= Array((k, v>=minPts))
+      corePoint = corePoint.union(sc.makeRDD(upd_core)).groupByKey().map(x => (x._1, x._2.foldLeft(false)((prev, v) => prev|v)))
+      println("corePoint: after add")
+      corePoint.foreach(println)
+      //val judge = coreCell.join(sc.makeRDD(Array(base)).map(x => (x, -1))).collect()
+      coreCell = coreCell.union(sc.makeRDD(upd_core).map(x => (base, x._2))).groupByKey().map(x => (x._1, x._2.foldLeft(false)((prev, v) => prev|v)))
+      println("core cell")
+      coreCell.foreach(println)
+      //val pejudge = coreCell.join(sc.makeRDD(Array(base)).map(x => (x, -1))).collect()(0)._2._1
+      //edge, aBCP maintain
+      //possibleBCPMaintain.map(x => ((solveGroup(x._1), solveGroup(x._2)), (x._1, x._2))).groupBy(_._1).map
+
+      if(possibleBCPMaintain.length!=0){
+        witnessMap = witnessMap.union(sc.makeRDD(possibleBCPMaintain).map(x => ((solveGroup(x._1), solveGroup(x._2)), x)).groupByKey()).groupByKey().map(x => {
+          var tmp = Array[(Vector[Int], Vector[Int])]()
+          for(y <- x._2) for(item <- y) tmp ++= Array(item)
+          (x._1, tmp)
+        })
+      }
+      println("witness")
+      witnessMap.map(x => {
+        println(x._1)
+        x._2.foreach(println)
+      })
+      //edge
+      //val edges = possibleBCPMaintain.map(x => (solveGroup(x._1), solveGroup(x._2)))
+      /*
+      val corecelllocal = coreCell.filter(_._2).map(x => x._1).collect().toSet
+      if(corecelllocal.contains(base)){
+        vertex ++= Set(base)
+        for((k, v) <- edges){
+          if(corecelllocal.contains(v)){
+            vertex ++= Set(v)
+            if(edge.contains(k))
+              edge.put(k, edge(k).++:(Set(v)))
+            else
+              edge.put(k, Set(v))
+          }
+        }
+      for((k, v) <- edges){
+        if(edge.contains(k)){
+          var tmp = edge(k)
+          tmp ++= Set(v)
+          edge.put(k, tmp)
+        }
+        else{
+          edge.put(k, Set(v))
+        }
+      }*/
+    }
+    // END ADDITION
+
+    all = all.join(deletionRDD).map(x => {
+      var originSet = x._2._1.toSet
+      for(item <- x._2._2) originSet -= item
+      (x._1, originSet.toArray)
+    })
+    val deletion = all.join(deletionRDD).map(x => {
+      var tmp = Array[Vector[Int]]()
+      val origin = x._2._1.toSet
+      for(item <- x._2._2) if(origin.contains(item)) tmp ++= Array(item)
+      (x._1, tmp)
+    })
+    vincnt = vincnt.union(sc.makeRDD(vinMp.toArray)).groupByKey().map(x => (x._1, x._2.foldLeft(-1)((prev, v) => math.max(prev, v))))
+    // DELETION
+    var removeList = Array[Vector[Int]]()
+    var removeRelCore = Array[Vector[Int]]()
+    for(x <- deletion){
+      val base = x._1
+      val EpsSearch = appendingInc.map(x => {
+        var tmp = Vector[Int]()
+        for(i <- base.indices) tmp ++= Vector(base(i) + x(i))
+        tmp
+      })
+      val relatedPts = EpsSearch.map(x => (x, -1)).join(all).map(x => (x._1, x._2._2))
+      val relPts = relatedPts.map(x => x._2).flatMap(x => x)
+      val relCnt = relPts.map(x => (x, -1)).join(vincnt).map(x => (x._1, x._2._2)).collect()
+      for((k, v) <- relCnt) if(!vinMp.contains(k)) vinMp.put(k, v)
+      for(pt <- x._2){
+        if(vinMp.contains(pt)){
+          vinMp.remove(pt)
+          removeList ++= Array(pt)
+        }
+        for(relpt <- relPts.collect()){
+          val dis = ecudlian(pt, relpt)
+          if(dis <= eps){
+            if(vinMp.contains(relpt)){
+              if(vinMp(relpt) == minPts) removeRelCore ++= Array(relpt)
+              vinMp.put(relpt, vinMp(relpt) - 1)
+            }
+          }
+          else if(dis <= maxdis){
+            if(vinMp.contains(relpt)) {
+              val minus = new util.Random().nextInt(2)
+              if(vinMp(relpt)==minPts && minus==1) removeRelCore ++= Array(relpt)
+              vinMp.put(relpt, vinMp(relpt) - minus)
+            }
+          }
+        }
+      }
+      // removerelcore + removelist => remove
+    }
+    //val corePtRemove = removeRelCore.union(sc.makeRDD(removeList.map(x => (x, -1))).join(corePoint).filter(_._2._2).collect().map(x => x._1)).toSet
+    //val coreCellRemove = corePtRemove.
+    val degreeCorePts = removeRelCore.toSet
+    val deletedCorePts = sc.makeRDD(removeList.map(x => (x, -1))).join(corePoint).filter(_._2._2).map(x => x._1).collect().toSet
+    witnessMap = witnessMap.map(x => {
+      val ori = x._2
+      var tmp = Array[(Vector[Int], Vector[Int])]()
+      for(p <- ori){
+        if(!degreeCorePts.contains(p._1) && !degreeCorePts.contains(p._2) && !deletedCorePts.contains(p._1) && !deletedCorePts.contains(p._2))
+          tmp ++= Array(p)
+      }
+      (x._1, tmp.toIterable)
+    })
+    val check = witnessMap.filter(_._2.isEmpty).collect().map(x => x._1)
+    var addwitness = Array[((Vector[Int], Vector[Int]), Iterable[(Vector[Int], Vector[Int])])]()
+    for(ck <- check){
+      val fPt = corePoint.join(sc.makeRDD(Array(ck._1)).map(x => (x, -1)).join(all).map(x => x._2._2).flatMap(x => x).map(x => (x, -1))).filter(_._2._1).map(x => x._1)
+      val tPt = corePoint.join(sc.makeRDD(Array(ck._2)).map(x => (x, -1)).join(all).map(x => x._2._2).flatMap(x => x).map(x => (x, -1))).filter(_._2._1).map(x => x._1)
+      var tmp = Array[(Vector[Int], Vector[Int])]()
+      for(f <- fPt.collect() if tmp.isEmpty){
+        for(t <- tPt.collect() if tmp.isEmpty){
+          val dis = ecudlian(f, t)
+          if(dis <= eps){
+            tmp ++= Array((f, t))
+          }
+        }
+      }
+      if(tmp.nonEmpty) addwitness ++= Array(((ck._1, ck._2), tmp.toIterable))
+    }
+    witnessMap = witnessMap.filter(_._2.nonEmpty).union(sc.makeRDD(addwitness))
+    witnessMap.map(x => {
+      println(x._1)
+      x._2.foreach(println)
+    })
+    // END DELETION
+
+    //edge: from witness Map
+    edgeX = witnessMap.map(x => x._1)
+    Vertex = edgeX.map(x => Array(x._1, x._2)).flatMap(x => x)
+
+    // Status Update
+    vincnt = vincnt.union(sc.makeRDD(vinMp.toArray)).groupByKey().map(x => (x._1, x._2.foldLeft(-1)((prev, v) => math.min(prev, v))))
+    globalRDD = all.map(x => (x._1, x._2.toIterable))
+    appendingRDD = sc.makeRDD(Array[(Vector[Int], Iterable[Vector[Int]])]())
+
+    queryCC_().map(x => {
+      x.foreach(println)
+      println()
+    })
   }
 
   def hash(cell: Vector[Int]): Int={
@@ -378,13 +612,40 @@ object Dynamic_DBSCAN extends Serializable {
     tmp
   }
 
-  def evaluate(): Unit={
-    var result = query()
-
+  def evaluate(result: Iterable[Iterable[Vector[Int]]]): Unit={
+    var mp = mutable.HashMap[Vector[Int], Int]()
+    val cla = mutable.HashMap(("Iris-setosa", 0), ("Iris-versicolor", 1), ("Iris-virginica", 2))
+    val line = sc.textFile("./data/iris.data").map(_.split(",")).filter(_.length>0)
+      .map(x => {
+        var tmp = Vector[Int]()
+        for(i <- x.indices) if(i!=x.length-1) tmp ++= Vector((x(i).toDouble*precision).toInt)
+        //println(tmp)
+        x.foreach(println)
+        if(x.length == 5) (tmp, cla(x(4)))
+        else (tmp, -1)
+      }).map(x => {
+      var tmp = solveGroup(x._1)
+      (tmp, x)
+    }).groupByKey().map(x => {
+      val t = x._2.toArray
+      (x._1, (t(0)._2, t.length))
+    })
+    var cnt = 0
+    var tot = 0
+    for(res <- result){
+      val tmp = sc.makeRDD(res.toArray).map(x => (x, -1)).join(line).map(x => x._2._2).reduceByKey(_+_).map(x => (x._2, x._1)).sortByKey().collect()
+      if(tmp(0)._1 > tmp(tmp.length-1)._1) cnt += tmp(0)._1
+      else cnt += tmp(tmp.length-1)._1
+      tot += tmp.map(x => x._1).sum
+    }
+    println(cnt)
+    println("accurancy:")
+    println(cnt.toDouble/tot.toDouble)
   }
 
   def main(args: Array[String]): Unit = {
     sc.setLogLevel("ERROR")
+    //dynamic_dbscan()
     semidy_dbscan()
 
     val scc = new StreamingContext(sc, Seconds(1))
@@ -398,7 +659,10 @@ object Dynamic_DBSCAN extends Serializable {
 
     structure.foreachRDD(rdd => {
       appendingRDD ++= rdd.map(x => (solveGroup(x), x)).groupByKey()
+      //dynamic_dbscan()
       semidy_dbscan()
+      //queryCC().map(x => x.foreach(println))
+      appendingRDD.foreach(println)
     })
 
     scc.start()
