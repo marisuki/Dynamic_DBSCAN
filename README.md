@@ -1,17 +1,15 @@
 # Recurrence of: Dynamic Density Based Clustering(Tao et.al SIGMOD 2017)
 
-This repo is a recurrence of dynamic DBSCAN for paper: [Dynamic Density Based Clustering](https://dl.acm.org/citation.cfm?id=3064050) with some optimization on the indexing , calculation of core points and the linkage of core points/core cells.
+This repo is a recurrence of dynamic DBSCAN for paper: [Dynamic Density Based Clustering](https://dl.acm.org/citation.cfm?id=3064050) with some optimization on the indexing, calculation of core points and the linkage of core points/core cells. The related data frames are based on the paper: [DBSCAN Revisited: Mis-Claim, Un-Fixability, and Approximation](https://dl.acm.org/citation.cfm?doid=2723372.2737792) and the reoccurence project is [QuadForest](https://github.com/marisuki/QuadForest). This repo has finished building and is under testing now. Please inform me when errors occurs, I will help to solve that.
 
 
-## Process:
-
-THIS REPO IS STILL UNDER BUILDING. Some Bugs may occur!
+## Status:
 
 This repo is based on [Spark Streaming](http://spark.apache.org/streaming/) for dynamic data.
 
-I have finished the main parts of dbscan and it now need to be tested: on performance and accuracy. 
+I have finished all algorithms and it now need to be tested: on performance and accuracy. 
 
-This implementation is based on the [QuadForest](https://github.com/marisuki/QuadForest) for accelerating the process of maintaining the core points/cells. And if you want to use this repo as a mean of clustering dynamic and static data, you'd better use this repo: [QuadForest](https://github.com/marisuki/QuadForest) for testing the parameters: [eps, rho, minPts] for better performance: use the QuadForest/test/UnitTest.java and feed you data demo to cut the error rate.
+This implementation is based on the [QuadForest](https://github.com/marisuki/QuadForest) for accelerating the process of maintaining the core points/cells. And if you want to use this repo as a mean of clustering dynamic and static data. 
 
 ## Other things:
 
