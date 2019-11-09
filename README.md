@@ -11,6 +11,8 @@ I have finished all algorithms and it now need to be tested: on performance and 
 
 This implementation is based on the [QuadForest](https://github.com/marisuki/QuadForest) for accelerating the process of maintaining the core points/cells. And if you want to use this repo as a mean of clustering dynamic and static data. 
 
+There are some deprecate files in src folder. They will be removed on next version.
+
 ## Testing:
 
 From init file, this repo can achieve 640734/684017ms = 0.93 pts/ms (Testing evironment: Intel i7-8700 @3.2GHz, 24GB RAM, JDK-1.8, Scala-2.11, Win10Pro)
