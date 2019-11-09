@@ -1,13 +1,13 @@
 object Main {
   def main(args: Array[String]): Unit = {
-
+    //val st = System.currentTimeMillis()
     DBSCAN.DBSCANStreamingStart(
-      "./data/dbscan_input.dat",
-      1.0,
+      "./data/cluster5.data",
+      4.0,
       0.01,
-      4,
+      50,
       2,
-      10,
+      1,
       "localhost",
       8080,
       1,

@@ -128,7 +128,7 @@ public class QuadForest implements Serializable {
         else return 0;
     }
     public Map<Vector<Integer>, Integer> updateVinCntStatus(){
-        //long st = System.currentTimeMillis();
+        long st = System.currentTimeMillis();
         //int cnt = 0;
         Map<Vector<Integer>, Integer> ans = new HashMap<>();
         for(Vector<Integer> t: this.modified) {
@@ -144,8 +144,8 @@ public class QuadForest implements Serializable {
             }
         }
         //modified.clear();
-        //long ed = System.currentTimeMillis();
-        //System.out.println("Status Update Cost: "+(ed-st)+" ms.");
+        long ed = System.currentTimeMillis();
+        System.out.println("Status Update Cost: "+(ed-st)+" ms.");
         //System.gc();
         return ans;
     }

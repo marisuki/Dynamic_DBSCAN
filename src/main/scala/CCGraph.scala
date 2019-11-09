@@ -5,7 +5,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-
+@deprecated
 object CCGraph extends Serializable {
 
   def traitAPI(sc: SparkContext, edges: RDD[(Vector[Int], Vector[Int])]): RDD[Iterable[Vector[Int]]]={
@@ -32,8 +32,12 @@ object CCGraph extends Serializable {
   def main(args: Array[String]): Unit = {
     val conf = new SparkConf().setMaster("local[2]").setAppName("Dynamic DBSCAN")
     val sc = new SparkContext(conf)
-    var s = mutable.HashMap((1, 2))
-    s.put(1, 4)
-    s.foreach(println)
+    var vertex = sc.makeRDD(Array((1, Vector(1,2)), (2, Vector(2,3)), (3, Vector(1,5)), (4, Vector(4,5)), (5, Vector(9,2))))
+      .map(x => (x._1.toLong, x._2))
+    var edge:RDD[(Int, Int)] = sc.makeRDD(Array((1,2), (3,4), (3,5)))
+    val edges:RDD[Edge[String]] = edge.map(x => Edge(x._1.toLong, x._2.toLong))
+    val graph = Graph(vertex, edges)
+    val res = graph.connectedComponents()
+    res.vertices.foreach(println)
   }
 }
